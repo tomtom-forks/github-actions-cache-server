@@ -16,6 +16,9 @@ const MB = 1024 * 1024
 
 const versions = ['v2', 'v1'] as const
 
+const repoId = '123'
+const branchRef = 'refs/heads/main'
+
 for (const version of versions) {
   describe(`save and restore cache with @actions/cache package with api ${version}`, () => {
     beforeAll(() => {
@@ -59,6 +62,8 @@ test(
     const { cacheId } = await storage.reserveCache({
       key: 'cache-a',
       version: '1',
+      repoId,
+      branchRef,
     })
     if (!cacheId) throw new Error('Failed to reserve cache')
 
@@ -86,17 +91,21 @@ test(
       await storage.getCacheEntry({
         keys: ['cache-a'],
         version: '1',
+        repoId,
+        branchRef,
       }),
     ).toStrictEqual({
       archiveLocation: expect.stringMatching(
         new RegExp(
-          `http:\/\/localhost:3000\/download\/[^\/]+\/${getCacheFileName('cache-a', '1')}`,
+          `http:\/\/localhost:3000\/download\/[^\/]+\/${getCacheFileName('cache-a', '1', repoId, branchRef)}`,
         ),
       ),
       cacheKey: 'cache-a',
     })
     expect(
-      await storage.driver.createReadStream(getCacheFileName('cache-a', '1')).catch(() => null),
+      await storage.driver
+        .createReadStream(getCacheFileName('cache-a', '1', repoId, branchRef))
+        .catch(() => null),
     ).toBeInstanceOf(Readable)
 
     await storage.pruneCaches()
@@ -106,10 +115,14 @@ test(
       await storage.getCacheEntry({
         keys: ['cache-a'],
         version: '1',
+        repoId,
+        branchRef,
       }),
     ).toBeNull()
     expect(
-      await storage.driver.createReadStream(getCacheFileName('cache-a', '1')).catch(() => null),
+      await storage.driver
+        .createReadStream(getCacheFileName('cache-a', '1', repoId, branchRef))
+        .catch(() => null),
     ).toBe(null)
   },
 )

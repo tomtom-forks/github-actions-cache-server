@@ -16,6 +16,8 @@ export interface CacheKeysTable {
   id: string
   key: string
   version: string
+  repo_id: string
+  branch_ref: string
   updated_at: string
   accessed_at: string
 }
@@ -23,6 +25,8 @@ export interface UploadsTable {
   created_at: string
   key: string
   version: string
+  repo_id: string
+  branch_ref: string
   id: string
 }
 export interface UploadPartsTable {
@@ -88,30 +92,48 @@ type DB = Awaited<ReturnType<typeof useDB>>
  */
 export async function findKeyMatch(
   db: DB,
-  args: { key: string; version: string; restoreKeys?: string[] },
+  args: { key: string; version: string; restoreKeys?: string[]; repoId: string; branchRef: string },
 ) {
   logger.debug('Finding key match', args)
   const exactPrimaryMatch = await db
     .selectFrom('cache_keys')
-    .where('id', '=', getCacheKeyId(args.key, args.version))
+    .where('id', '=', getCacheKeyId(args.key, args.version, args.repoId, args.branchRef))
     .selectAll()
     .executeTakeFirst()
   if (exactPrimaryMatch) {
     return exactPrimaryMatch
   }
 
-  logger.debug('No exact primary matches found')
+  logger.debug('No exact primary matches found in requested branch')
 
   const prefixedPrimaryMatch = await db
     .selectFrom('cache_keys')
     .where('key', 'like', `${args.key}%`)
     .where('version', '=', args.version)
+    .where('repo_id', '=', args.repoId)
+    .where('branch_ref', '=', args.branchRef)
     .orderBy('cache_keys.updated_at', 'desc')
     .selectAll()
     .executeTakeFirst()
 
   if (prefixedPrimaryMatch) {
     return prefixedPrimaryMatch
+  }
+
+  logger.debug('No prefix matches found in requested branch')
+
+  const prefixedMainBranchMatch = await db
+    .selectFrom('cache_keys')
+    .where('key', 'like', `${args.key}%`)
+    .where('version', '=', args.version)
+    .where('repo_id', '=', args.repoId)
+    .where('branch_ref', 'in', ['heads/refs/main', 'heads/refs/master'])
+    .orderBy('cache_keys.updated_at', 'desc')
+    .selectAll()
+    .executeTakeFirst()
+
+  if (prefixedMainBranchMatch) {
+    return prefixedMainBranchMatch
   }
 
   if (!args.restoreKeys) {
@@ -123,7 +145,7 @@ export async function findKeyMatch(
   for (const key of args.restoreKeys) {
     const exactMatch = await db
       .selectFrom('cache_keys')
-      .where('id', '=', getCacheKeyId(key, args.version))
+      .where('id', '=', getCacheKeyId(args.key, args.version, args.repoId, args.branchRef))
       .orderBy('cache_keys.updated_at', 'desc')
       .selectAll()
       .executeTakeFirst()
@@ -131,12 +153,14 @@ export async function findKeyMatch(
       return exactMatch
     }
 
-    logger.debug('No exact matches found for', key)
+    logger.debug('No exact restore keys matches found for', key)
 
     const prefixedMatch = await db
       .selectFrom('cache_keys')
       .where('version', '=', args.version)
       .where('key', 'like', `${key}%`)
+      .where('repo_id', '=', args.repoId)
+      .where('branch_ref', '=', args.branchRef)
       .orderBy('cache_keys.updated_at', 'desc')
       .selectAll()
       .executeTakeFirst()
@@ -145,12 +169,34 @@ export async function findKeyMatch(
       return prefixedMatch
     }
 
-    logger.debug('No prefixed matches found for', key)
+    logger.debug('No prefix restore keys matches found in requested branch')
+
+    const prefixedKeyMainBranchMatch = await db
+      .selectFrom('cache_keys')
+      .where('key', 'like', `${key}%`)
+      .where('version', '=', args.version)
+      .where('repo_id', '=', args.repoId)
+      .where('branch_ref', 'in', ['refs/heads/main', 'refs/heads/master'])
+      .orderBy('cache_keys.updated_at', 'desc')
+      .selectAll()
+      .executeTakeFirst()
+
+    if (prefixedKeyMainBranchMatch) {
+      return prefixedKeyMainBranchMatch
+    }
+
+    logger.debug('No prefixed restore keys matches found in default branch for', key)
   }
 }
 
-export async function listEntriesByKey(db: DB, key: string) {
-  return db.selectFrom('cache_keys').where('key', '=', key).selectAll().execute()
+export async function listEntriesByKey(db: DB, key: string, repoId: string, branchRef: string) {
+  return db
+    .selectFrom('cache_keys')
+    .where('key', '=', key)
+    .where('repo_id', '=', repoId)
+    .where('branch_ref', '=', branchRef)
+    .selectAll()
+    .execute()
 }
 
 export async function updateOrCreateKey(
@@ -159,10 +205,14 @@ export async function updateOrCreateKey(
     key,
     version,
     date,
+    repoId,
+    branchRef,
   }: {
     key: string
     version: string
     date?: Date
+    repoId: string
+    branchRef: string
   },
 ) {
   const now = date ?? new Date()
@@ -170,22 +220,28 @@ export async function updateOrCreateKey(
     .updateTable('cache_keys')
     .set('updated_at', now.toISOString())
     .set('accessed_at', now.toISOString())
-    .where('id', '=', getCacheKeyId(key, version))
+    .where('id', '=', getCacheKeyId(key, version, repoId, branchRef))
     .executeTakeFirst()
   if (Number(updateResult.numUpdatedRows) === 0) {
-    await createKey(db, { key, version, date })
+    await createKey(db, { key, version, date, repoId, branchRef })
   }
 }
 
 export async function touchKey(
   db: DB,
-  { key, version, date }: { key: string; version: string; date?: Date },
+  {
+    key,
+    version,
+    repoId,
+    branchRef,
+    date,
+  }: { key: string; version: string; repoId: string; branchRef: string; date?: Date },
 ) {
   const now = date ?? new Date()
   await db
     .updateTable('cache_keys')
     .set('accessed_at', now.toISOString())
-    .where('id', '=', getCacheKeyId(key, version))
+    .where('id', '=', getCacheKeyId(key, version, repoId, branchRef))
     .execute()
 }
 
@@ -206,30 +262,41 @@ export async function findStaleKeys(
 
 export async function createKey(
   db: DB,
-  { key, version, date }: { key: string; version: string; date?: Date },
+  {
+    key,
+    version,
+    date,
+    repoId,
+    branchRef,
+  }: { key: string; version: string; date?: Date; repoId: string; branchRef: string },
 ) {
   const now = date ?? new Date()
   await db
     .insertInto('cache_keys')
     .values({
-      id: getCacheKeyId(key, version),
+      id: getCacheKeyId(key, version, repoId, branchRef),
       key,
       version,
+      repo_id: repoId,
+      branch_ref: branchRef,
       updated_at: now.toISOString(),
       accessed_at: now.toISOString(),
     })
     .execute()
 }
 
-function getCacheKeyId(key: string, version: string) {
-  return hash('sha256', Buffer.from(`${key}-${version}`))
+function getCacheKeyId(key: string, version: string, repoid: string, branchref: string) {
+  return hash('sha256', Buffer.from(`${key}-${version}-${repoid}-${branchref}`))
 }
 
 export async function pruneKeys(db: DB, keys?: Selectable<CacheKeysTable>[]) {
   if (keys) {
     await db.transaction().execute(async (tx) => {
-      for (const { key, version } of keys ?? []) {
-        await tx.deleteFrom('cache_keys').where('id', '=', getCacheKeyId(key, version)).execute()
+      for (const { key, version, repo_id, branch_ref } of keys ?? []) {
+        await tx
+          .deleteFrom('cache_keys')
+          .where('id', '=', getCacheKeyId(key, version, repo_id, branch_ref))
+          .execute()
       }
     })
   } else {
@@ -237,12 +304,22 @@ export async function pruneKeys(db: DB, keys?: Selectable<CacheKeysTable>[]) {
   }
 }
 
-export async function getUpload(db: DB, { key, version }: { key: string; version: string }) {
+export async function getUpload(
+  db: DB,
+  {
+    key,
+    version,
+    repoId,
+    branchRef,
+  }: { key: string; version: string; repoId: string; branchRef: string },
+) {
   const row = await db
     .selectFrom('uploads')
     .select('id')
     .where('key', '=', key)
     .where('version', '=', version)
+    .where('repo_id', '=', repoId)
+    .where('branch_ref', '=', branchRef)
     .executeTakeFirst()
   return row
 }

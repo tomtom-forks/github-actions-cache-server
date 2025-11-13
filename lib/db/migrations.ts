@@ -76,5 +76,32 @@ export function migrations(dbType: DatabaseDriverName) {
         await db.schema.alterTable('upload_parts').dropColumn('e_tag').execute()
       },
     },
+    $4_add_repo_branch_ref_columns: {
+      async up(db) {
+        await db.schema
+          .alterTable('uploads')
+          .addColumn('repo_id', 'text', (col) => col.notNull())
+          .execute()
+        await db.schema
+          .alterTable('cache_keys')
+          .addColumn('repo_id', 'text', (col) => col.notNull())
+          .execute()
+        await db.schema
+          .alterTable('uploads')
+          .addColumn('branch_ref', 'text', (col) => col.notNull())
+          .execute()
+        await db.schema
+          .alterTable('cache_keys')
+          .addColumn('branch_ref', 'text', (col) => col.notNull())
+          .execute()
+      },
+      async down(db) {
+        // Drop columns (not supported uniformly; use raw SQL where possible)
+        await db.schema.alterTable('uploads').dropColumn('repo_id').execute()
+        await db.schema.alterTable('cache_keys').dropColumn('repo_id').execute()
+        await db.schema.alterTable('uploads').dropColumn('branch_ref').execute()
+        await db.schema.alterTable('cache_keys').dropColumn('branch_ref').execute()
+      },
+    },
   } satisfies Record<string, Migration>
 }
