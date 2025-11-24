@@ -19,13 +19,17 @@ describe('setting last accessed date', async () => {
   })
 
   const version = '0577ec58bee6d5415625'
+  const repoId = '123'
+  const branchRef = 'refs/heads/main'
   test('`updateOrCreateKey` sets accessed_at', async () => {
     const date = new Date('2024-01-01T00:00:00Z')
-    await updateOrCreateKey(db, { key: 'cache-a', version, date })
+    await updateOrCreateKey(db, { key: 'cache-a', version, date, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'cache-a',
       version,
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.accessed_at).toBe('2024-01-01T00:00:00.000Z')
@@ -33,22 +37,26 @@ describe('setting last accessed date', async () => {
 
   test('`touchKey` updates accessed_at', async () => {
     const date = new Date('2024-01-01T00:00:00Z')
-    await updateOrCreateKey(db, { key: 'cache-a', version, date })
+    await updateOrCreateKey(db, { key: 'cache-a', version, date, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'cache-a',
       version,
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.accessed_at).toBe('2024-01-01T00:00:00.000Z')
     expect(match!.updated_at).toBe('2024-01-01T00:00:00.000Z')
 
     const newDate = new Date('2024-01-02T00:00:00Z')
-    await touchKey(db, { key: 'cache-a', version, date: newDate })
+    await touchKey(db, { key: 'cache-a', version, date: newDate, repoId, branchRef })
 
     const newMatch = await findKeyMatch(db, {
       key: 'cache-a',
       version,
+      repoId,
+      branchRef,
     })
     expect(newMatch).toBeDefined()
     expect(newMatch!.accessed_at).toBe('2024-01-02T00:00:00.000Z')
@@ -61,12 +69,38 @@ describe('getting stale keys', async () => {
   beforeEach(() => pruneKeys(db))
 
   const version = '0577ec58bee6d5415625'
+  const repoId = '123'
+  const branchRef = 'refs/heads/main'
   test('returns stale keys if threshold is passed', async () => {
     const referenceDate = new Date('2024-04-01T00:00:00Z')
-    await updateOrCreateKey(db, { key: 'cache-a', version, date: new Date('2024-01-01T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-b', version, date: new Date('2024-02-01T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-c', version, date: new Date('2024-03-15T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-d', version, date: new Date('2024-03-20T00:00:00Z') })
+    await updateOrCreateKey(db, {
+      key: 'cache-a',
+      version,
+      date: new Date('2024-01-01T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-b',
+      version,
+      date: new Date('2024-02-01T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-c',
+      version,
+      date: new Date('2024-03-15T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-d',
+      version,
+      date: new Date('2024-03-20T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
 
     const match = await findStaleKeys(db, { olderThanDays: 30, date: referenceDate })
     expect(match.length).toBe(2)
@@ -82,10 +116,34 @@ describe('getting stale keys', async () => {
 
   test('returns all keys if threshold is not passed', async () => {
     const referenceDate = new Date('2024-04-01T00:00:00Z')
-    await updateOrCreateKey(db, { key: 'cache-a', version, date: new Date('2024-01-01T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-b', version, date: new Date('2024-02-01T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-c', version, date: new Date('2024-03-15T00:00:00Z') })
-    await updateOrCreateKey(db, { key: 'cache-d', version, date: new Date('2024-04-01T00:00:00Z') })
+    await updateOrCreateKey(db, {
+      key: 'cache-a',
+      version,
+      date: new Date('2024-01-01T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-b',
+      version,
+      date: new Date('2024-02-01T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-c',
+      version,
+      date: new Date('2024-03-15T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
+    await updateOrCreateKey(db, {
+      key: 'cache-d',
+      version,
+      date: new Date('2024-04-01T00:00:00Z'),
+      repoId,
+      branchRef,
+    })
 
     const match = await findStaleKeys(db, { date: referenceDate })
     expect(match.length).toBe(4)

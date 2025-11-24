@@ -5,7 +5,7 @@ import type { CacheFileName } from './storage-driver'
 import cluster from 'node:cluster'
 import { randomBytes, randomInt } from 'node:crypto'
 import { createSingletonPromise } from '@antfu/utils'
-import consola from 'consola'
+
 import {
   findKeyMatch,
   findStaleKeys,
@@ -26,7 +26,7 @@ export const useStorageAdapter = createSingletonPromise(async () => {
     const driverName = ENV.STORAGE_DRIVER
     const driverClass = getStorageDriver(driverName)
     if (!driverClass) {
-      consola.error(`No storage driver found for ${driverName}`)
+      logger.error(`No storage driver found for ${driverName}`)
       // eslint-disable-next-line unicorn/no-process-exit
       process.exit(1)
     }
@@ -37,10 +37,20 @@ export const useStorageAdapter = createSingletonPromise(async () => {
 
     return {
       driver,
-      async reserveCache({ key, version }: { key: string; version: string }) {
-        logger.debug('Reserve:', { key, version })
+      async reserveCache({
+        key,
+        version,
+        repoId,
+        branchRef,
+      }: {
+        key: string
+        version: string
+        repoId: string
+        branchRef: string
+      }) {
+        logger.debug('Reserve:', { key, version, repoId, branchRef })
 
-        if (await getUpload(db, { key, version })) {
+        if (await getUpload(db, { key, version, repoId, branchRef })) {
           logger.debug(`Reserve: Already reserved. Ignoring...`, { key, version })
           return {
             cacheId: null,
@@ -56,6 +66,8 @@ export const useStorageAdapter = createSingletonPromise(async () => {
             id: uploadId.toString(),
             key,
             version,
+            repo_id: repoId,
+            branch_ref: branchRef,
           })
           .execute()
 
@@ -148,29 +160,62 @@ export const useStorageAdapter = createSingletonPromise(async () => {
           await updateOrCreateKey(tx, {
             key: upload.key,
             version: upload.version,
+            repoId: upload.repo_id,
+            branchRef: upload.branch_ref,
           })
 
           await driver.completeMultipartUpload({
-            cacheFileName: getCacheFileName(upload.key, upload.version),
+            cacheFileName: getCacheFileName(
+              upload.key,
+              upload.version,
+              upload.repo_id,
+              upload.branch_ref,
+            ),
             uploadId: upload.id,
             partNumbers: parts.map((part) => part.part_number),
           })
         })
       },
-      async getCacheEntry({ keys, version }: { keys: string[]; version: string }) {
+      async getCacheEntry({
+        keys,
+        version,
+        repoId,
+        branchRef,
+      }: {
+        keys: string[]
+        version: string
+        repoId: string
+        branchRef: string
+      }) {
         const primaryKey = keys[0]
         const restoreKeys = keys.length > 1 ? keys.slice(1) : undefined
 
-        const cacheKey = await findKeyMatch(db, { key: primaryKey, version, restoreKeys })
+        const cacheKey = await findKeyMatch(db, {
+          key: primaryKey,
+          version,
+          restoreKeys,
+          repoId,
+          branchRef,
+        })
 
         if (!cacheKey) {
-          logger.debug('Get: Cache entry not found', { keys, version })
+          logger.debug('Get: Cache entry not found', { keys, version, repoId, branchRef })
           return null
         }
 
-        await touchKey(db, { key: cacheKey.key, version: cacheKey.version })
+        await touchKey(db, {
+          key: cacheKey.key,
+          version: cacheKey.version,
+          repoId: cacheKey.repo_id,
+          branchRef: cacheKey.branch_ref,
+        })
 
-        const cacheFileName = getCacheFileName(cacheKey.key, cacheKey.version)
+        const cacheFileName = getCacheFileName(
+          cacheKey.key,
+          cacheKey.version,
+          cacheKey.repo_id,
+          cacheKey.branch_ref,
+        )
 
         logger.debug('Get: Found', cacheKey)
 
@@ -197,7 +242,9 @@ export const useStorageAdapter = createSingletonPromise(async () => {
           return
         }
 
-        await driver.delete(keys.map((key) => getCacheFileName(key.key, key.version)))
+        await driver.delete(
+          keys.map((key) => getCacheFileName(key.key, key.version, key.repo_id, key.branch_ref)),
+        )
         await pruneKeys(db, keys)
 
         logger.debug('Prune: Caches pruned', {
@@ -225,7 +272,7 @@ export const useStorageAdapter = createSingletonPromise(async () => {
       },
     }
   } catch (err) {
-    consola.error('Failed to initialize storage driver:', err)
+    logger.error('Failed to initialize storage driver:', err)
     // eslint-disable-next-line unicorn/no-process-exit
     process.exit(1)
   }

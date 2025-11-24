@@ -13,77 +13,91 @@ describe('key matching', async () => {
   })
 
   const version = '0577ec58bee6d5415625'
+  const repoId = '123'
+  const branchRef = 'refs/heads/main'
   test('exact primary match', async () => {
-    await updateOrCreateKey(db, { key: 'cache-a', version })
+    await updateOrCreateKey(db, { key: 'cache-a', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'cache-a',
       version,
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('cache-a')
     expect(match!.version).toBe(version)
   })
   test('exact restore key match', async () => {
-    await updateOrCreateKey(db, { key: 'cache-a', version })
+    await updateOrCreateKey(db, { key: 'cache-a', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'cache-b',
       version,
       restoreKeys: ['cache-a'],
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('cache-a')
     expect(match!.version).toBe(version)
   })
   test('prefixed restore key match', async () => {
-    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version })
+    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'prefixed-cache-b',
       version,
       restoreKeys: ['prefixed-cache'],
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('prefixed-cache-a')
     expect(match!.version).toBe(version)
   })
   test('restore key match with multiple keys', async () => {
-    await updateOrCreateKey(db, { key: 'cache-a', version })
-    await updateOrCreateKey(db, { key: 'cache-b', version })
+    await updateOrCreateKey(db, { key: 'cache-a', version, repoId, branchRef })
+    await updateOrCreateKey(db, { key: 'cache-b', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'cache-c',
       version,
       restoreKeys: ['cache-a', 'cache-b'],
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('cache-a')
     expect(match!.version).toBe(version)
   })
   test('prefixed restore key match with multiple keys returns newest key', async () => {
-    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version })
+    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version, repoId, branchRef })
     await sleep(10)
-    await updateOrCreateKey(db, { key: 'prefixed-cache-b', version })
+    await updateOrCreateKey(db, { key: 'prefixed-cache-b', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'prefixed-cache-c',
       version,
       restoreKeys: ['prefixed-cache'],
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('prefixed-cache-b')
     expect(match!.version).toBe(version)
   })
   test('restore key prefers exact match over prefixed match', async () => {
-    await updateOrCreateKey(db, { key: 'prefixed-cache', version })
+    await updateOrCreateKey(db, { key: 'prefixed-cache', version, repoId, branchRef })
     await sleep(10)
-    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version })
+    await updateOrCreateKey(db, { key: 'prefixed-cache-a', version, repoId, branchRef })
 
     const match = await findKeyMatch(db, {
       key: 'prefixed-cache-b',
       version,
       restoreKeys: ['prefixed-cache'],
+      repoId,
+      branchRef,
     })
     expect(match).toBeDefined()
     expect(match!.key).toBe('prefixed-cache')
