@@ -7,8 +7,10 @@ import { randomBytes, randomInt } from 'node:crypto'
 import { createSingletonPromise } from '@antfu/utils'
 
 import {
+  deleteCacheById,
   findKeyMatch,
   findStaleKeys,
+  getCacheById,
   getUpload,
   pruneKeys,
   touchKey,
@@ -270,6 +272,76 @@ export const useStorageAdapter = createSingletonPromise(async () => {
           }
         }
       },
+      async deleteCacheById(cacheId: string) {
+        logger.debug('Delete cache by ID:', cacheId)
+
+        const cache = await getCacheById(db, cacheId)
+        if (!cache) {
+          logger.debug('Delete: Cache not found', { cacheId })
+          return false
+        }
+
+        const cacheFileName = getCacheFileName(
+          cache.key,
+          cache.version,
+          cache.repo_id,
+          cache.branch_ref,
+        )
+
+        try {
+          await driver.delete([cacheFileName])
+          await deleteCacheById(db, cacheId)
+          logger.debug('Delete: Cache deleted', { cacheId })
+          return true
+        } catch (err) {
+          logger.error('Failed to delete cache', { cacheId }, err)
+          throw err
+        }
+      },
+      async getCacheFileSize(cacheId: string) {
+        logger.debug('Get cache file size:', cacheId)
+
+        const cache = await getCacheById(db, cacheId)
+        if (!cache) {
+          logger.debug('GetFileSize: Cache not found', { cacheId })
+          return null
+        }
+
+        const cacheFileName = getCacheFileName(
+          cache.key,
+          cache.version,
+          cache.repo_id,
+          cache.branch_ref,
+        )
+
+        if (driver.getFileSize) {
+          return driver.getFileSize(cacheFileName)
+        } else {
+          logger.debug('GetFileSize: Driver does not support getFileSize', { cacheId })
+        }
+
+        return null
+      },
+      async getDownloadUrl(cacheId: string) {
+        logger.debug('Get download URL:', cacheId)
+
+        const cache = await getCacheById(db, cacheId)
+        if (!cache) {
+          logger.debug('GetDownloadUrl: Cache not found', { cacheId })
+          return null
+        }
+
+        const cacheFileName = getCacheFileName(
+          cache.key,
+          cache.version,
+          cache.repo_id,
+          cache.branch_ref,
+        )
+
+        return ENV.ENABLE_DIRECT_DOWNLOADS && driver.createDownloadUrl
+          ? await driver.createDownloadUrl(cacheFileName)
+          : createLocalDownloadUrl(cacheFileName)
+      },
     }
   } catch (err) {
     logger.error('Failed to initialize storage driver:', err)
@@ -281,3 +353,4 @@ export const useStorageAdapter = createSingletonPromise(async () => {
 function createLocalDownloadUrl(cacheFileName: CacheFileName) {
   return `${ENV.API_BASE_URL}/download/${randomBytes(64).toString('hex')}/${cacheFileName}`
 }
+

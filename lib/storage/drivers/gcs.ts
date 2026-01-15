@@ -84,6 +84,16 @@ export const GCSStorageDriver = {
           prefix: `${BASE_FOLDER}/${UPLOAD_FOLDER}/${uploadId}`,
         })
       },
+
+      async getFileSize(cacheFileName) {
+        try {
+          const file = bucket.file(`${BASE_FOLDER}/${cacheFileName}`)
+          const [metadata] = await file.getMetadata()
+          return typeof metadata.size === 'string' ? Number.parseInt(metadata.size, 10) : (metadata.size ?? null)
+        } catch {
+          return null
+        }
+      },
     }
   },
 }

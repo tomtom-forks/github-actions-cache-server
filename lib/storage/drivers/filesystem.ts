@@ -1,4 +1,5 @@
 import type { StorageDriver } from '~/lib/storage/storage-driver'
+import { randomBytes } from 'node:crypto'
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 
@@ -13,6 +14,8 @@ export const FilesystemStorageDriver = {
     const options = parseEnv(
       z.object({
         STORAGE_FILESYSTEM_PATH: z.string().default('.data/storage/filesystem'),
+        NODE_IP: z.string().optional(),
+        NODE_PORT: z.coerce.number().int().min(1).max(65_535).optional(),
       }),
     )
 
@@ -78,6 +81,28 @@ export const FilesystemStorageDriver = {
         if (!(await fs.stat(filePath))) return null
 
         return createReadStream(filePath)
+      },
+
+      async getFileSize(cacheFileName) {
+        const filePath = path.join(rootFolder, BASE_FOLDER, cacheFileName)
+        try {
+          const stat = await fs.stat(filePath)
+          return stat.size
+        } catch {
+          return null
+        }
+      },
+
+      async createDownloadUrl(cacheFileName) {
+        const nodeIp = options.NODE_IP
+        const nodePort = options.NODE_PORT
+
+        if (!nodeIp || !nodePort) {
+          throw new Error('NODE_IP and NODE_PORT environment variables are required for createDownloadUrl')
+        }
+
+        const randomToken = randomBytes(64).toString('hex')
+        return `http://${nodeIp}:${nodePort}/download/${randomToken}/${cacheFileName}`
       },
     }
   },
