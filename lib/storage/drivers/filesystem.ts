@@ -14,8 +14,7 @@ export const FilesystemStorageDriver = {
     const options = parseEnv(
       z.object({
         STORAGE_FILESYSTEM_PATH: z.string().default('.data/storage/filesystem'),
-        NODE_IP: z.string().optional(),
-        NODE_PORT: z.coerce.number().int().min(1).max(65_535).optional(),
+        STORAGE_FILESYSTEM_DOWNLOAD_URL: z.string().url().optional(),
       }),
     )
 
@@ -94,15 +93,15 @@ export const FilesystemStorageDriver = {
       },
 
       async createDownloadUrl(cacheFileName) {
-        const nodeIp = options.NODE_IP
-        const nodePort = options.NODE_PORT
+        const baseUrl = options.STORAGE_FILESYSTEM_DOWNLOAD_URL
 
-        if (!nodeIp || !nodePort) {
-          throw new Error('NODE_IP and NODE_PORT environment variables are required for createDownloadUrl')
+        if (!baseUrl) {
+          throw new Error('STORAGE_FILESYSTEM_DOWNLOAD_URL environment variable is required for createDownloadUrl')
         }
 
         const randomToken = randomBytes(64).toString('hex')
-        return `http://${nodeIp}:${nodePort}/download/${randomToken}/${cacheFileName}`
+        const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+        return `${normalizedBaseUrl}/download/${randomToken}/${cacheFileName}`
       },
     }
   },
