@@ -1,4 +1,5 @@
 import type { StorageDriver } from '~/lib/storage/storage-driver'
+import { randomBytes } from 'node:crypto'
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 
@@ -13,6 +14,8 @@ export const FilesystemStorageDriver = {
     const options = parseEnv(
       z.object({
         STORAGE_FILESYSTEM_PATH: z.string().default('.data/storage/filesystem'),
+        STORAGE_FILESYSTEM_DOWNLOAD_URL: z.string().url().optional(),
+        EXTERNAL_FILESYSTEM_DOWNLOAD_URL: z.url().optional(),
       }),
     )
 
@@ -78,6 +81,40 @@ export const FilesystemStorageDriver = {
         if (!(await fs.stat(filePath))) return null
 
         return createReadStream(filePath)
+      },
+
+      async getFileSize(cacheFileName) {
+        const filePath = path.join(rootFolder, BASE_FOLDER, cacheFileName)
+        try {
+          const stat = await fs.stat(filePath)
+          return stat.size
+        } catch {
+          return null
+        }
+      },
+
+      async createDownloadUrl(cacheFileName) {
+        const baseUrl = options.STORAGE_FILESYSTEM_DOWNLOAD_URL
+
+        if (!baseUrl) {
+          throw new Error('STORAGE_FILESYSTEM_DOWNLOAD_URL environment variable is required for createDownloadUrl')
+        }
+
+        const randomToken = randomBytes(64).toString('hex')
+        const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+        return `${normalizedBaseUrl}/download/${randomToken}/${cacheFileName}`
+      },
+
+      async createExternalDownloadUrl(cacheFileName) {
+        const baseUrl = options.EXTERNAL_FILESYSTEM_DOWNLOAD_URL
+
+        if (!baseUrl) {
+          throw new Error('EXTERNAL_FILESYSTEM_DOWNLOAD_URL environment variable is required for createExternalDownloadUrl')
+        }
+
+        const randomToken = randomBytes(64).toString('hex')
+        const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+        return `${normalizedBaseUrl}/download/${randomToken}/${cacheFileName}`
       },
     }
   },

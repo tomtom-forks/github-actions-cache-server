@@ -7,6 +7,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3'
@@ -184,6 +185,20 @@ export const S3StorageDriver = {
       async cleanupMultipartUpload(uploadId) {
         const objectNames = await listObjectsByPrefix(`${BASE_FOLDER}/${UPLOAD_FOLDER}/${uploadId}`)
         await deleteMany(objectNames)
+      },
+
+      async getFileSize(cacheFileName) {
+        try {
+          const response = await s3.send(
+            new HeadObjectCommand({
+              Bucket: options.STORAGE_S3_BUCKET,
+              Key: `${BASE_FOLDER}/${cacheFileName}`,
+            }),
+          )
+          return response.ContentLength ?? null
+        } catch {
+          return null
+        }
       },
     }
   },

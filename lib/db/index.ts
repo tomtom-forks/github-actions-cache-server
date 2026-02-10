@@ -199,6 +199,31 @@ export async function listEntriesByKey(db: DB, key: string, repoId: string, bran
     .execute()
 }
 
+export async function listCachesByRepoId(db: DB, repoId: string) {
+  return db
+    .selectFrom('cache_keys')
+    .where('repo_id', '=', repoId)
+    .selectAll()
+    .orderBy('updated_at', 'desc')
+    .execute()
+}
+
+export async function getCacheById(db: DB, cacheId: string) {
+  return db
+    .selectFrom('cache_keys')
+    .where('id', '=', cacheId)
+    .selectAll()
+    .executeTakeFirst()
+}
+
+export async function deleteCacheById(db: DB, cacheId: string) {
+  const result = await db
+    .deleteFrom('cache_keys')
+    .where('id', '=', cacheId)
+    .executeTakeFirst()
+  return Number(result.numDeletedRows) > 0
+}
+
 export async function updateOrCreateKey(
   db: DB,
   {
