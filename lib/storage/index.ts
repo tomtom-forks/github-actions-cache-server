@@ -338,8 +338,8 @@ export const useStorageAdapter = createSingletonPromise(async () => {
           cache.branch_ref,
         )
 
-        return ENV.ENABLE_DIRECT_DOWNLOADS && driver.createDownloadUrl
-          ? await driver.createDownloadUrl(cacheFileName)
+        return ENV.ENABLE_DIRECT_DOWNLOADS && driver.createExternalDownloadUrl
+          ? await driver.createExternalDownloadUrl(cacheFileName)
           : createLocalDownloadUrl(cacheFileName)
       },
     }

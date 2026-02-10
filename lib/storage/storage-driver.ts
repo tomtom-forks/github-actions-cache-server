@@ -11,6 +11,7 @@ export interface StorageDriver {
   delete: (cacheFileNames: CacheFileName[]) => Promise<void>
   createReadStream: (cacheFileName: CacheFileName) => Promise<ReadableStream | Readable | null>
   createDownloadUrl?: (cacheFileName: CacheFileName) => Promise<string>
+  createExternalDownloadUrl?: (cacheFileName: CacheFileName) => Promise<string>
   getFileSize?: (cacheFileName: CacheFileName) => Promise<number | null>
   uploadPart: (opts: {
     uploadId: string
